@@ -19,7 +19,7 @@ The agent then:
 3. Compares the stock against the overall market (S&P 500).
 4. Remembers your budget and risk level for the rest of the conversation.
 5. Explains the trend and the evidence in plain language.
-6. *(Coming in Lesson 4)* Pauses and asks you to approve before "buying".
+6. Pauses and asks you to approve, edit or reject before "buying" (a simulated order, no real money).
 
 Everything runs in the terminal and in notebooks. There is no website, no database and no real broker. Market data comes from the free `yfinance` library.
 
@@ -32,7 +32,7 @@ Everything runs in the terminal and in notebooks. There is no website, no databa
 | 1 | Models, messages, tools, first agent | `notebooks/01_basics.ipynb` | Done |
 | 2 | Tools with real stock data | `notebooks/02_tools.ipynb` | Done |
 | 3 | Memory across messages | `notebooks/03_memory.ipynb` | Done |
-| 4 | Human-in-the-loop approval | | Planned |
+| 4 | Human-in-the-loop approval | `notebooks/04_human_in_the_loop.ipynb` | Done |
 | 5 | Sub-agents (for example, a news checker) | | Planned |
 | 6 | Context: files and user details | | Planned |
 | 7 | Final terminal app | `stock_advisor/` | Planned |
@@ -133,13 +133,14 @@ langchain-demo-project/
 ├── notebooks/
 │   ├── 01_basics.ipynb    Models, messages, tools, first agent
 │   ├── 02_tools.ipynb     Real stock tools and the tool chain
-│   └── 03_memory.ipynb    Memory with a checkpointer and thread ids
+│   ├── 03_memory.ipynb    Memory with a checkpointer and thread ids
+│   └── 04_human_in_the_loop.ipynb   Approve, edit or reject an order
 └── stock_advisor/
     ├── __init__.py
     └── tools.py           The five stock tools, shared by every notebook
 ```
 
-### The five stock tools (`stock_advisor/tools.py`)
+### The stock tools (`stock_advisor/tools.py`)
 
 | Tool | What it does |
 |------|--------------|
@@ -148,6 +149,8 @@ langchain-demo-project/
 | `get_price_trend` | Price change, high and low over a period (1mo to 5y) |
 | `get_market_trend` | The same for the S&P 500, so a stock can be compared with the market |
 | `get_recent_news` | The latest headlines for a ticker |
+| `calculate_shares` | Exact share count and leftover cash. The agent must use this instead of doing math itself |
+| `buy_stock` | A **simulated** order that only writes to a list. Always behind a human approval step |
 
 ---
 
@@ -181,6 +184,7 @@ langchain-demo-project/
 
 - **The agent can state things no tool gave it.** Language models sometimes fill gaps from memory (for example a dividend yield or an "average P/E"). The system prompt asks for tool-only numbers, which reduces this but does not remove it. A reviewer step is planned.
 - **News can be off-topic.** The news source sometimes returns general market headlines. A news-checking sub-agent is planned.
+- **Edits are not checked.** If you edit an order to more shares than your budget, it still goes through. Budget checks are an exercise in Lesson 4.
 - **Memory is temporary.** `InMemorySaver` is lost when the notebook restarts.
 - **Data is unofficial.** `yfinance` is fine for learning, not for production.
 

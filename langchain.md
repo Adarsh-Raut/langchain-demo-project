@@ -30,7 +30,7 @@ jupyter lab                        # opens the notebook interface in your browse
 | 1 | The basics | Models, messages, tools, your first agent | `01_basics.ipynb` |
 | 2 | Tools with real data | Name-to-ticker search, prices, trends, news | `02_tools.ipynb` |
 | 3 | Memory | Making the agent remember a conversation | `03_memory.ipynb` |
-| 4 | Human-in-the-loop | Pausing the agent so a person can approve an action | *(next)* |
+| 4 | Human-in-the-loop | Pausing the agent so a person can approve an action | `04_human_in_the_loop.ipynb` |
 | 5 | Sub-agents | One agent that hands tasks to other agents | *(next)* |
 | 6 | Context | Giving the agent files and user details | *(next)* |
 | 7 | Final project | The stock advisor, run from the terminal | `stock_advisor/` |
@@ -213,6 +213,95 @@ The tools now live in `stock_advisor/tools.py`. Notebooks import them with `from
 1. In Step 5, ask "What is my budget?" in a new thread id. Does it know?
 2. Run `advisor.get_state(me)` after three questions and count the messages. Why so many? (Hint: tool calls and tool results are messages too.)
 3. Restart the kernel, run Step 5 again, and ask the budget question. What happened to the memory?
+
+---
+
+## Lesson 4: Human-in-the-loop
+
+Notebook: `notebooks/04_human_in_the_loop.ipynb`
+
+### The problem
+
+An agent that can spend money must not do it alone. It can be wrong. In an early test, with no price tool, it guessed 11 shares of Apple for a $2,000 budget. That would have cost $3,894. A human looking at the order before it runs catches this.
+
+### The idea
+
+Some tools only **read** (search, prices, news). Some **change something** (buy). We let the read tools run freely and put a pause in front of the ones that change something.
+
+```python
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+
+agent = create_agent(
+    model=MODEL,
+    tools=RESEARCH_TOOLS + TRADING_TOOLS,
+    middleware=[HumanInTheLoopMiddleware(interrupt_on={"buy_stock": True})],
+    checkpointer=InMemorySaver(),      # required: the agent must remember where it stopped
+)
+```
+
+### What happens
+
+```
+User: "I have $2000. Buy as many Apple shares as I can afford."
+   |
+   v
+agent searches the ticker, gets the price, calls calculate_shares     (runs freely)
+   |
+   v
+agent calls buy_stock(AAPL, 5)  ---->  PAUSE. Nothing is bought yet.
+   |
+   v
+You look at the order and the estimated cost, then choose:
+   approve  -> buy_stock runs exactly as the agent asked
+   edit     -> buy_stock runs with YOUR numbers (for example, 2 shares)
+   reject   -> buy_stock never runs; the agent reads your reason
+```
+
+When the agent pauses, `invoke` returns a result with an `__interrupt__` key. To continue, you call `invoke` again with your decision:
+
+```python
+from langgraph.types import Command
+
+agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config)
+
+# edit
+{"type": "edit", "edited_action": {"name": "buy_stock", "args": {"ticker": "AAPL", "shares": 2}}}
+
+# reject
+{"type": "reject", "message": "I changed my mind."}
+```
+
+### Two new tools
+
+- `calculate_shares(budget, price)` does the money math in Python. Language models are bad at arithmetic (in Lesson 3 one said 13 shares when only 12 fit). **The agent should never do money math itself.**
+- `buy_stock(ticker, shares)` is a pretend broker. It writes to a list called `ORDERS`. No real money moves.
+
+### What we tested
+
+| Decision | Result |
+|----------|--------|
+| Approve | 5 AAPL shares bought for $1,770.35 |
+| Edit to 2 shares | The agent asked for 5, and 2 were bought ($708.14) |
+| Reject | No order was placed |
+
+### Things to remember
+
+1. **The pause is saved.** Because of the checkpointer, the agent can resume after you run other cells.
+2. **Use a new thread id for each scenario.** A paused thread stays paused until you answer it.
+3. **The price can move.** You see an estimate at the pause, but `buy_stock` fetches the price again when it runs.
+4. **Gate actions, not reads.** Pausing on every tool would make the agent unusable.
+5. **Nothing stops a silly edit.** If you edit to more shares than your budget allows, the order still goes through. A real app would also check the budget inside `buy_stock`. This is one of the exercise questions.
+6. **Reject reasons are only a hint.** After a rejection the agent read our reason but still re-summarised its research instead of acknowledging the decision. Prompts steer an agent, they do not control it.
+
+### Code organisation
+
+`stock_advisor/tools.py` now has two lists: `RESEARCH_TOOLS` (read only) and `TRADING_TOOLS` (`calculate_shares`, `buy_stock`). `ALL_TOOLS` is still the research tools only, so the Lesson 3 notebook cannot buy anything by accident.
+
+### Exercise
+
+1. Run Step 8 and answer `n` with a reason such as "too risky for me". Does the agent's reply use your reason?
+2. Run Step 8 again and answer `e` with a number too big for your budget. Nothing stops you. How would you prevent that?
+3. Change `interrupt_on` to `{'buy_stock': True, 'get_snapshot': True}` and ask about Apple. Why would that be annoying in a real app?
 
 ---
 

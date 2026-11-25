@@ -57,4 +57,34 @@ def get_recent_news(ticker: str) -> str:
     return "\n".join(lines) or "No recent news."
 
 
-ALL_TOOLS = [search_ticker, get_snapshot, get_price_trend, get_market_trend, get_recent_news]
+RESEARCH_TOOLS = [search_ticker, get_snapshot, get_price_trend, get_market_trend, get_recent_news]
+ALL_TOOLS = RESEARCH_TOOLS  # kept so older notebooks still work. Research only: nothing here can buy.
+
+
+@tool
+def calculate_shares(budget: float, price: float) -> str:
+    """Work out how many whole shares a budget can buy at a given price, and the cash left over.
+    Always use this for share counts and costs. Never do money math yourself."""
+    if price <= 0 or budget < 0:
+        return "Budget must be 0 or more and price must be above 0."
+    shares = int(budget // price)
+    cost = shares * price
+    return f"{shares} whole shares at ${price:.2f} cost ${cost:.2f}. Cash left over: ${budget - cost:.2f}."
+
+
+# Pretend broker. Real orders would go to a broker API. Here we only record them in a list.
+ORDERS: list[dict] = []
+
+
+@tool
+def buy_stock(ticker: str, shares: int) -> str:
+    """Place an order to buy whole shares of a stock at the current market price.
+    Only call this after the user has said they want to buy."""
+    price = yf.Ticker(ticker).fast_info["last_price"]
+    order = {"ticker": ticker, "shares": shares, "price": round(price, 2), "total": round(price * shares, 2)}
+    ORDERS.append(order)
+    return f"ORDER PLACED (simulated): bought {shares} shares of {ticker} at ${price:.2f}, total ${price * shares:.2f}."
+
+
+# Trading tools change something, so always put a human approval step in front of buy_stock.
+TRADING_TOOLS = [calculate_shares, buy_stock]
