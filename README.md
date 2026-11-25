@@ -33,7 +33,7 @@ Everything runs in the terminal and in notebooks. There is no website, no databa
 | 2 | Tools with real stock data | `notebooks/02_tools.ipynb` | Done |
 | 3 | Memory across messages | `notebooks/03_memory.ipynb` | Done |
 | 4 | Human-in-the-loop approval | `notebooks/04_human_in_the_loop.ipynb` | Done |
-| 5 | Sub-agents (for example, a news checker) | | Planned |
+| 5 | Sub-agents: news checker, researcher, reviewer | `notebooks/05_sub_agents.ipynb` | Done |
 | 6 | Context: files and user details | | Planned |
 | 7 | Final terminal app | `stock_advisor/` | Planned |
 
@@ -134,11 +134,21 @@ langchain-demo-project/
 │   ├── 01_basics.ipynb    Models, messages, tools, first agent
 │   ├── 02_tools.ipynb     Real stock tools and the tool chain
 │   ├── 03_memory.ipynb    Memory with a checkpointer and thread ids
-│   └── 04_human_in_the_loop.ipynb   Approve, edit or reject an order
+│   ├── 04_human_in_the_loop.ipynb   Approve, edit or reject an order
+│   └── 05_sub_agents.ipynb          News checker, researcher and reviewer sub-agents
 └── stock_advisor/
     ├── __init__.py
-    └── tools.py           The five stock tools, shared by every notebook
+    ├── tools.py           The stock tools, shared by every notebook
+    └── agents.py          The sub-agents (news checker, researcher, reviewer)
 ```
+
+### The sub-agents (`stock_advisor/agents.py`)
+
+| Sub-agent | What it does |
+|-----------|--------------|
+| News checker | Keeps only headlines that are really about the company. Used by `get_relevant_news` |
+| Researcher | Runs all the research tools and reports facts only. The main advisor calls it as `research_company` |
+| Reviewer | Checks an answer against the raw tool results and lists unsupported claims |
 
 ### The stock tools (`stock_advisor/tools.py`)
 
@@ -163,7 +173,8 @@ langchain-demo-project/
 | **Agent** | A loop: the model thinks, asks for a tool, reads the result, and repeats until it can answer. |
 | **Memory** | A checkpointer saves the conversation so the agent remembers earlier messages. A thread id names each conversation. |
 | **Human-in-the-loop** | The agent pauses before a risky action and waits for a person to approve, edit or reject it. |
-| **Sub-agent** | A second agent that does one focused job for the main agent. |
+| **Sub-agent** | A second agent that does one focused job for the main agent. You wrap it in a tool so the main agent can call it. |
+| **Structured output** | Forcing an agent to answer in a fixed shape (for example a list of numbers and a reason) so your code can read it safely. |
 
 ---
 
@@ -175,6 +186,7 @@ langchain-demo-project/
 | `model_not_found` / "does not exist or you do not have access" | Groq changes its model list. Run Step 7 in `02_tools.ipynb` to list the models your key can use, then change the `MODEL` value. Pick one that supports tools. |
 | `ModuleNotFoundError` | The wrong kernel is selected. Choose `.venv` at the top right of the notebook. |
 | `No module named 'stock_advisor'` | Run the notebook from the `notebooks/` folder. The notebooks add the parent folder to the path themselves. |
+| `429 rate_limit_exceeded` from Groq | The free tier allows about 8,000 tokens per minute and the sub-agents use many. The code retries automatically. If it still fails, wait a minute and rerun the cell |
 | Stock data is empty or errors | `yfinance` is an unofficial source and can be rate-limited. Wait a minute and try again. |
 | Notebook shows a dot (unsaved) after a file changed on disk | Close the tab, choose **Don't Save**, then reopen it. Saving an out-of-date copy would overwrite the newer file. |
 
@@ -182,8 +194,9 @@ langchain-demo-project/
 
 ## Known limitations
 
-- **The agent can state things no tool gave it.** Language models sometimes fill gaps from memory (for example a dividend yield or an "average P/E"). The system prompt asks for tool-only numbers, which reduces this but does not remove it. A reviewer step is planned.
-- **News can be off-topic.** The news source sometimes returns general market headlines. A news-checking sub-agent is planned.
+- **The agent can state things no tool gave it.** Language models sometimes fill gaps from memory (for example a dividend yield or an "average P/E"). The system prompts ask for tool-only numbers and a reviewer sub-agent checks answers, which reduces this but does not remove it.
+- **News is checked, not perfect.** A sub-agent now removes off-topic headlines, but it is a language model and sometimes keeps a borderline one.
+- **The reviewer is a model too.** It catches most made-up claims but can miss mild embellishments.
 - **Edits are not checked.** If you edit an order to more shares than your budget, it still goes through. Budget checks are an exercise in Lesson 4.
 - **Memory is temporary.** `InMemorySaver` is lost when the notebook restarts.
 - **Data is unofficial.** `yfinance` is fine for learning, not for production.
@@ -192,7 +205,7 @@ langchain-demo-project/
 
 ## Tech used
 
-- [LangChain](https://docs.langchain.com) 1.x for agents and tools
+- [LangChain](https://docs.langchain.com) 1.x for agents, tools and sub-agents
 - [LangGraph](https://langchain-ai.github.io/langgraph/) for memory and human-in-the-loop
 - [Groq](https://groq.com) for the language model (`openai/gpt-oss-120b`)
 - [yfinance](https://github.com/ranaroussi/yfinance) for market data

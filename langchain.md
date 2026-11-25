@@ -31,7 +31,7 @@ jupyter lab                        # opens the notebook interface in your browse
 | 2 | Tools with real data | Name-to-ticker search, prices, trends, news | `02_tools.ipynb` |
 | 3 | Memory | Making the agent remember a conversation | `03_memory.ipynb` |
 | 4 | Human-in-the-loop | Pausing the agent so a person can approve an action | `04_human_in_the_loop.ipynb` |
-| 5 | Sub-agents | One agent that hands tasks to other agents | *(next)* |
+| 5 | Sub-agents | One agent that hands tasks to other agents | `05_sub_agents.ipynb` |
 | 6 | Context | Giving the agent files and user details | *(next)* |
 | 7 | Final project | The stock advisor, run from the terminal | `stock_advisor/` |
 
@@ -302,6 +302,87 @@ agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config
 1. Run Step 8 and answer `n` with a reason such as "too risky for me". Does the agent's reply use your reason?
 2. Run Step 8 again and answer `e` with a number too big for your budget. Nothing stops you. How would you prevent that?
 3. Change `interrupt_on` to `{'buy_stock': True, 'get_snapshot': True}` and ask about Apple. Why would that be annoying in a real app?
+
+---
+
+## Lesson 5: Sub-agents
+
+Notebook: `notebooks/05_sub_agents.ipynb`. Code: `stock_advisor/agents.py`.
+
+### The problems
+
+Two problems kept appearing in earlier lessons:
+1. The news tool returned headlines that were **not about the company** (a Xiaomi story under Apple).
+2. The agent stated **facts no tool gave it** (a dividend yield, an "average P/E").
+
+### The idea
+
+A **sub-agent** is a normal agent with one narrow job. The main agent hands work to it the same way it calls a tool: you wrap the sub-agent inside an ordinary `@tool` function.
+
+```
+You  ->  Advisor (manager)  ->  research_company  ->  Researcher (sub-agent)
+                                                         |-> search_ticker, get_snapshot,
+                                                         |   get_price_trend, get_market_trend
+                                                         '-> get_relevant_news -> News checker (sub-agent)
+                |
+                '-> calculate_shares
+                '-> buy_stock   (human approval, Lesson 4)
+        then:  Reviewer (sub-agent) checks the final answer against the raw tool results
+```
+
+### The three sub-agents
+
+| Sub-agent | Job | Tools it has |
+|-----------|-----|--------------|
+| **News checker** | Reads 10 headlines, keeps only those about the company | none |
+| **Researcher** | Collects price, trend, market comparison and news, reports facts only | the five research tools |
+| **Reviewer** | Reads the evidence and an answer, lists every unsupported claim | none |
+
+### Structured output
+
+The news checker and reviewer must answer in a fixed shape, because our code reads their answers. You do this with `response_format`:
+
+```python
+class NewsVerdict(BaseModel):
+    relevant_numbers: list[int]
+    reason: str
+
+news_checker = create_agent(model=MODEL, tools=[], system_prompt="...", response_format=NewsVerdict)
+
+verdict = news_checker.invoke({...})["structured_response"]   # a real NewsVerdict object
+```
+
+### Why split the work
+
+- **The manager stays focused.** It sees a 150-word report, not pages of raw numbers.
+- **Each agent follows a few rules well.** One agent with twenty rules follows them worse.
+- **You can test and improve each piece alone.** We tested the reviewer by planting made-up claims.
+
+### What we saw
+
+| Test | Result |
+|------|--------|
+| News checker, Nvidia | Kept 4 of 10 headlines and dropped the unrelated ones (Dollar Tree, an S&P market preview) |
+| News checker, Apple | Kept 2 of 10 |
+| Reviewer on a clean answer | PASS |
+| Reviewer on an answer with a planted 0.6% dividend and "average P/E of 22" | FAIL, and it named both claims |
+| Asking about Apple's dividend yield and debt, which no tool returns | The advisor said "No data available" instead of inventing numbers |
+| Revision loop with a fake failure report | The advisor rewrote its answer and dropped the flagged claim |
+
+### Costs and limits
+
+1. **Every sub-agent is extra model calls.** More time and more tokens. The full notebook takes about two minutes.
+2. **Groq's free tier allows about 8,000 tokens per minute for this model.** Sub-agents use a lot of tokens, so you can hit `429 rate_limit_exceeded`. We set `max_retries=8` so the client waits and retries instead of crashing. If it still fails, wait a minute and rerun the cell.
+3. **The checker and reviewer are language models too.** They sometimes keep a borderline headline ("Top Analyst Reports for Apple, Philip Morris & Intel") or pass a mild embellishment ("points to strong governance" from a headline that did not say that). They lower the risk. They do not remove it.
+4. **The reviewer only sees what you give it.** That is why `research_company` saves the researcher's raw tool results in a list called `EVIDENCE`. Without that, the reviewer could not check the manager's claims.
+5. **The key must be loaded first.** `agents.py` builds its agents the moment it is imported, so it loads `.env` itself. Otherwise you get a "GROQ_API_KEY must be set" error in a notebook.
+
+### Exercise
+
+1. Run Step 1 for `AAPL` and `TSLA`. Which headlines did the checker keep? Do you agree with each?
+2. In Step 5, add a third planted claim to `bad` (for example, "Apple has no debt."). Does the reviewer catch it?
+3. Ask `ask_with_review` about **two** companies. How many times did the manager call `research_company`?
+4. Which would you prefer: a reviewer that sometimes flags good answers, or one that sometimes misses bad ones? Why?
 
 ---
 
