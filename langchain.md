@@ -372,10 +372,25 @@ verdict = news_checker.invoke({...})["structured_response"]   # a real NewsVerdi
 ### Costs and limits
 
 1. **Every sub-agent is extra model calls.** More time and more tokens. The full notebook takes about two minutes.
-2. **Groq's free tier allows about 8,000 tokens per minute for this model.** Sub-agents use a lot of tokens, so you can hit `429 rate_limit_exceeded`. We set `max_retries=8` so the client waits and retries instead of crashing. If it still fails, wait a minute and rerun the cell.
+2. **Groq's free tier has two limits for this model: about 8,000 tokens per minute and 200,000 tokens per day.** Sub-agents use a lot of tokens (one full question can use 20,000 or more), so you can hit `429 rate_limit_exceeded`. We set `max_retries=8`, which covers the per-minute limit. The **daily** limit is different: waiting a few seconds does not help. Once it is used up, requests only trickle through until the allowance recovers, and a test run can crawl for many minutes. Run fewer cells per session, and do not rerun the whole notebook over and over.
 3. **The checker and reviewer are language models too.** They sometimes keep a borderline headline ("Top Analyst Reports for Apple, Philip Morris & Intel") or pass a mild embellishment ("points to strong governance" from a headline that did not say that). They lower the risk. They do not remove it.
 4. **The reviewer only sees what you give it.** That is why `research_company` saves the researcher's raw tool results in a list called `EVIDENCE`. Without that, the reviewer could not check the manager's claims.
 5. **The key must be loaded first.** `agents.py` builds its agents the moment it is imported, so it loads `.env` itself. Otherwise you get a "GROQ_API_KEY must be set" error in a notebook.
+
+### A mistake that got past the reviewer (and the fix)
+
+The first version passed this answer: *"Recent articles highlight Microsoft's strong security posture ('Patchpocalypse' response)... reinforcing its reputation for stability."* The real headline was **"Microsoft declares a code red in the middle of a 'Patchpocalypse'"**. A code red during a patch crisis is a problem, not a strength. The answer turned bad news into good news, and the reviewer said PASS.
+
+We traced it. The researcher quoted both headlines correctly. The **manager** agent then added its own spin. The reviewer, given the full, long evidence, sometimes let it through, even though it catches the same sentence when the evidence is short.
+
+The fix has three parts, all prompt changes:
+1. **Researcher:** copy headlines exactly, and never say what they imply.
+2. **Manager:** quote news exactly, and never say what it implies.
+3. **Reviewer:** a "NEWS RULE" that flags any description of a news item that adds meaning the headline does not state (words like "strong", "proactive", "reinforcing").
+
+Test so far: with the new rule the reviewer **failed the spun sentence 2 times out of 2**, naming the "proactive security patches" and "reinforcing its reputation" claims. **Still to do:** check that the reviewer still **passes** an answer that quotes the headlines fairly (so it has not become too strict), and run the full pipeline on the Microsoft question once. We stopped here because of the daily token limit, so this check is pending.
+
+**Lesson:** a reviewer checks whether facts appear in the evidence. It does not automatically check whether you described a fact *fairly*. You have to tell it to look for that, and even then it is a language model, so it can still miss things.
 
 ### Exercise
 

@@ -186,7 +186,7 @@ langchain-demo-project/
 | `model_not_found` / "does not exist or you do not have access" | Groq changes its model list. Run Step 7 in `02_tools.ipynb` to list the models your key can use, then change the `MODEL` value. Pick one that supports tools. |
 | `ModuleNotFoundError` | The wrong kernel is selected. Choose `.venv` at the top right of the notebook. |
 | `No module named 'stock_advisor'` | Run the notebook from the `notebooks/` folder. The notebooks add the parent folder to the path themselves. |
-| `429 rate_limit_exceeded` from Groq | The free tier allows about 8,000 tokens per minute and the sub-agents use many. The code retries automatically. If it still fails, wait a minute and rerun the cell |
+| `429 rate_limit_exceeded` from Groq | The free tier allows about 8,000 tokens per minute **and 200,000 per day**, and sub-agents use many. The code retries automatically for the per-minute limit. If the error mentions `tokens per day (TPD)`, you have used the day's allowance: stop and continue later |
 | Stock data is empty or errors | `yfinance` is an unofficial source and can be rate-limited. Wait a minute and try again. |
 | Notebook shows a dot (unsaved) after a file changed on disk | Close the tab, choose **Don't Save**, then reopen it. Saving an out-of-date copy would overwrite the newer file. |
 
@@ -196,7 +196,8 @@ langchain-demo-project/
 
 - **The agent can state things no tool gave it.** Language models sometimes fill gaps from memory (for example a dividend yield or an "average P/E"). The system prompts ask for tool-only numbers and a reviewer sub-agent checks answers, which reduces this but does not remove it.
 - **News is checked, not perfect.** A sub-agent now removes off-topic headlines, but it is a language model and sometimes keeps a borderline one.
-- **The reviewer is a model too.** It catches most made-up claims but can miss mild embellishments.
+- **The reviewer is a model too.** It catches most made-up claims but can miss mild embellishments, such as turning a negative headline into a positive description. A news rule was added to reduce this, and one check of it is still pending (see `langchain.md`, Lesson 5).
+- **Free-tier token limits.** The full sub-agent notebook uses a lot of tokens. Plan for about a few full runs per day.
 - **Edits are not checked.** If you edit an order to more shares than your budget, it still goes through. Budget checks are an exercise in Lesson 4.
 - **Memory is temporary.** `InMemorySaver` is lost when the notebook restarts.
 - **Data is unofficial.** `yfinance` is fine for learning, not for production.

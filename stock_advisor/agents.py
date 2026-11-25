@@ -72,7 +72,9 @@ researcher = create_agent(
         "Find the ticker, then get the snapshot, the price trend, the market trend over the same period, "
         "and the news. Report facts only, in under 200 words.\n"
         "Rules: only state numbers that appear in a tool result; only compare with the market if you "
-        "have both numbers; if you lack data, say 'no data'. Never add general market knowledge."
+        "have both numbers; if you lack data, say 'no data'. Never add general market knowledge.\n"
+        "News: copy each headline exactly as given. Do not say what it implies or whether it is good or "
+        "bad news. A headline like 'code red' stays 'code red'; do not turn it into 'strong security'."
     ),
 )
 
@@ -101,6 +103,10 @@ reviewer = create_agent(
         "List every specific number, comparison, or factual claim in the ANSWER that the EVIDENCE does "
         "not support. Examples: a dividend yield, an 'average P/E', 'outperformed the market' without "
         "market numbers, a price that differs from the evidence.\n"
+        "NEWS RULE: the answer may only quote a headline or say what it literally says. Flag any "
+        "description of a news item that adds meaning the headline does not state, such as 'strong', "
+        "'proactive', 'reinforcing', 'shows stability', or 'a sign of'. A 'code red' headline described "
+        "as 'strong security' must be flagged.\n"
         "Arithmetic on numbers that ARE in the evidence is fine. Disclaimers are fine. "
         "If nothing is unsupported, verdict is 'pass' with an empty list. Otherwise verdict is 'fail'."
     ),
